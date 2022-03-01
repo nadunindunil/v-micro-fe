@@ -1,34 +1,6 @@
-const globalTimeoutConfig = {
-  bootstrap: {
-    millis: 3000,
-    dieOnTimeout: false,
-    warningMillis: 1000,
-  },
-  mount: {
-    millis: 3000,
-    dieOnTimeout: false,
-    warningMillis: 1000,
-  },
-  unmount: {
-    millis: 3000,
-    dieOnTimeout: false,
-    warningMillis: 1000,
-  },
-  unload: {
-    millis: 3000,
-    dieOnTimeout: false,
-    warningMillis: 1000,
-  },
-  update: {
-    millis: 3000,
-    dieOnTimeout: false,
-    warningMillis: 1000,
-  },
-};
-
 function toUpdatePromise(vBundle: any) {
   return Promise.resolve().then(() => {
-    if (vBundle.status !== MOUNTED) {
+    if (vBundle.status !== AppStatuses.MOUNTED) {
       throw Error(
         `Cannot update vBundle '${toName(
           vBundle
@@ -36,11 +8,11 @@ function toUpdatePromise(vBundle: any) {
       );
     }
 
-    vBundle.status = UPDATING;
+    vBundle.status = AppStatuses.UPDATING;
 
     return reasonableTime(vBundle, 'update')
       .then(() => {
-        vBundle.status = MOUNTED;
+        vBundle.status = AppStatuses.MOUNTED;
         return vBundle;
       })
       .catch((err) => {
@@ -52,10 +24,10 @@ function toUpdatePromise(vBundle: any) {
 
 function toUnmountPromise(microFe: any, hardFail: any) {
   return Promise.resolve().then(() => {
-    if (microFe.status !== MOUNTED) {
+    if (microFe.status !== AppStatuses.MOUNTED) {
       return microFe;
     }
-    microFe.status = UNMOUNTING;
+    microFe.status = AppStatuses.UNMOUNTING;
 
     const unmountChildrenVBundles = Object.keys(microFe.vBundles).map(
       (vBundleId) => microFe.vBundles[vBundleId].unmountThisVBundle()
@@ -85,7 +57,7 @@ function toUnmountPromise(microFe: any, hardFail: any) {
         .then(() => {
           // The microFe needs to stay in a broken status if its children vBundles fail to unmount
           if (!vBundleError) {
-            microFe.status = NOT_MOUNTED;
+            microFe.status = AppStatuses.NOT_MOUNTED;
           }
         })
         .catch((err) => {
@@ -102,11 +74,11 @@ function toUnmountPromise(microFe: any, hardFail: any) {
 
 function toBootstrapPromise(microFe: any, hardFail: any) {
   return Promise.resolve().then(() => {
-    if (microFe.status !== NOT_BOOTSTRAPPED) {
+    if (microFe.status !== AppStatuses.NOT_BOOTSTRAPPED) {
       return microFe;
     }
 
-    microFe.status = BOOTSTRAPPING;
+    microFe.status = AppStatuses.BOOTSTRAPPING;
 
     if (!microFe.bootstrap) {
       // Default implementation of bootstrap
@@ -116,7 +88,7 @@ function toBootstrapPromise(microFe: any, hardFail: any) {
     return reasonableTime(microFe, 'bootstrap')
       .then(successfulBootstrap)
       .catch((err) => {
-        console.log('error in bootstrap', err, hardFail);
+        console.error('error in bootstrap', err, hardFail);
         // if (hardFail) {
         //   throw transformErr(err, microFe, SKIP_BECAUSE_BROKEN);
         // } else {
@@ -127,7 +99,7 @@ function toBootstrapPromise(microFe: any, hardFail: any) {
   });
 
   function successfulBootstrap() {
-    microFe.status = NOT_MOUNTED;
+    microFe.status = AppStatuses.NOT_MOUNTED;
     return microFe;
   }
 }
@@ -135,9 +107,9 @@ function toBootstrapPromise(microFe: any, hardFail: any) {
 let beforeFirstMountFired = false;
 let firstMountFired = false;
 
-export function toMountPromise(microFe: any, hardFail: any) {
+function toMountPromise(microFe: any, hardFail: any) {
   return Promise.resolve().then(() => {
-    if (microFe.status !== NOT_MOUNTED) {
+    if (microFe.status !== AppStatuses.NOT_MOUNTED) {
       return microFe;
     }
 
@@ -148,9 +120,9 @@ export function toMountPromise(microFe: any, hardFail: any) {
 
     return reasonableTime(microFe, 'mount')
       .then(() => {
-        microFe.status = MOUNTED;
+        microFe.status = AppStatuses.MOUNTED;
 
-        console.log('--------------------mounted');
+        // console.log('--------------------mounted');
         if (!firstMountFired) {
           //   window.dispatchEvent(new CustomEvent("v-app:first-mount"));
           firstMountFired = true;
@@ -162,7 +134,7 @@ export function toMountPromise(microFe: any, hardFail: any) {
         // If we fail to mount the microFe, we should attempt to unmount it before putting in SKIP_BECAUSE_BROKEN
         // We temporarily put the microFe into MOUNTED status so that toUnmountPromise actually attempts to unmount it
         // instead of just doing a no-op.
-        microFe.status = MOUNTED;
+        microFe.status = AppStatuses.MOUNTED;
         return toUnmountPromise(microFe, true).then(
           setSkipBecauseBroken,
           setSkipBecauseBroken
@@ -171,7 +143,7 @@ export function toMountPromise(microFe: any, hardFail: any) {
         function setSkipBecauseBroken() {
           if (!hardFail) {
             // handleAppError(err, microFe, SKIP_BECAUSE_BROKEN);
-            microFe.status = SKIP_BECAUSE_BROKEN;
+            microFe.status = AppStatuses.SKIP_BECAUSE_BROKEN;
             return microFe;
           } else {
             console.log('in error', err);
@@ -183,9 +155,9 @@ export function toMountPromise(microFe: any, hardFail: any) {
 }
 
 function assign(...args: any[]) {
-  console.log(args);
+  // console.log(args);
   for (let i = args.length - 1; i > 0; i--) {
-    for (let key in args[i]) {
+    for (const key in args[i]) {
       if (key === '__proto__') {
         continue;
       }
@@ -219,7 +191,7 @@ function getProps(microFe: any) {
 
   const result = assign({}, microFe.customProps, {
     name,
-    mountVBundle: mountVApp.bind(microFe),
+    mountVBundle: mountVBundle.bind(microFe),
   });
 
   result.unmountSelf = microFe.unmountThisVBundle;
@@ -228,14 +200,18 @@ function getProps(microFe: any) {
 }
 
 function reasonableTime(microFe: any, lifecycle: any) {
-  const timeoutConfig = microFe.timeouts[lifecycle];
+  const timeoutConfig = {
+    millis: 3000,
+    dieOnTimeout: false,
+    warningMillis: 1000,
+  };
   const warningPeriod = timeoutConfig.warningMillis;
 
   return new Promise((resolve, reject) => {
     let finished = false;
     let errored = false;
 
-    console.log(lifecycle);
+    // console.log(lifecycle);
 
     microFe[lifecycle](getProps(microFe))
       .then((val: any) => {
@@ -275,7 +251,7 @@ function reasonableTime(microFe: any, lifecycle: any) {
   });
 }
 
-export function flattenFnArray(microFe: any, lifecycle: string) {
+function flattenFnArray(microFe: any, lifecycle: string) {
   let fns = microFe[lifecycle] || [];
   fns = Array.isArray(fns) ? fns : [fns];
   if (fns.length === 0) {
@@ -293,19 +269,21 @@ export function flattenFnArray(microFe: any, lifecycle: string) {
   };
 }
 
-const LOADING_SOURCE_CODE = 'LOADING_SOURCE_CODE';
-const NOT_BOOTSTRAPPED = 'NOT_BOOTSTRAPPED';
-const BOOTSTRAPPING = 'BOOTSTRAPPING';
-const NOT_MOUNTED = 'NOT_MOUNTED';
-// const MOUNTING = 'MOUNTING';
-const MOUNTED = 'MOUNTED';
-const UPDATING = 'UPDATING';
-const UNMOUNTING = 'UNMOUNTING';
-// const UNLOADING = 'UNLOADING';
-// const LOAD_ERROR = 'LOAD_ERROR';
-const SKIP_BECAUSE_BROKEN = 'SKIP_BECAUSE_BROKEN';
+const enum AppStatuses {
+  LOADING_SOURCE_CODE = 'LOADING_SOURCE_CODE',
+  NOT_BOOTSTRAPPED = 'NOT_BOOTSTRAPPED',
+  BOOTSTRAPPING = 'BOOTSTRAPPING',
+  NOT_MOUNTED = 'NOT_MOUNTED',
+  MOUNTING = 'MOUNTING',
+  MOUNTED = 'MOUNTED',
+  UPDATING = 'UPDATING',
+  UNMOUNTING = 'UNMOUNTING',
+  UNLOADING = 'UNLOADING',
+  LOAD_ERROR = 'LOAD_ERROR',
+  SKIP_BECAUSE_BROKEN = 'SKIP_BECAUSE_BROKEN',
+}
 
-export class VApp {
+class VApp {
   private _vBundle: any;
   private _loadPromise: any;
   private _bootstrapPromise: any;
@@ -348,7 +326,7 @@ export class VApp {
   }
 
   public update(props: any): any {
-    console.log('vBundle props --- ', props);
+    // console.log('vBundle props --- ', props);
     return this._updatePromise(props);
   }
 
@@ -375,15 +353,9 @@ function promiseWithoutReturnValue(promise: Promise<any>): Promise<any> {
 let vBundleCount = 0;
 const rootMicroFes = { vBundles: {} };
 
-export default function mountRootVBundle(...args: any) {
-  const reValue = mountVApp.apply(rootMicroFes, args);
-  console.log('re value', reValue);
-  return reValue;
-}
+const owningMicroFe: any = rootMicroFes;
 
-let owningMicroFe: any = rootMicroFes;
-
-function mountVApp(config: any, customProps: any): any {
+export function mountVBundle(config: any, customProps: any): any {
   console.log(config, customProps);
   const id = vBundleCount++;
 
@@ -398,14 +370,14 @@ function mountVApp(config: any, customProps: any): any {
     id,
     vBundles: {},
     status: passedConfigLoadingFunction
-      ? LOADING_SOURCE_CODE
-      : NOT_BOOTSTRAPPED,
+      ? AppStatuses.LOADING_SOURCE_CODE
+      : AppStatuses.NOT_BOOTSTRAPPED,
     customProps,
     // parentName: toName(owningMicroFe),
     unmountThisVBundle() {
       return _mountPromise
         .then(() => {
-          if (vBundle.status !== MOUNTED) {
+          if (vBundle.status !== AppStatuses.MOUNTED) {
             throw Error(
               `Cannot unmount vBundle -- it is in a ${vBundle.status} status`
             );
@@ -424,7 +396,7 @@ function mountVApp(config: any, customProps: any): any {
           return value;
         })
         .catch((err: any) => {
-          vBundle.status = SKIP_BECAUSE_BROKEN;
+          vBundle.status = AppStatuses.SKIP_BECAUSE_BROKEN;
           rejectUnmount(err);
           throw err;
         });
@@ -499,13 +471,12 @@ function mountVApp(config: any, customProps: any): any {
     const mount = flattenFnArray(config, 'mount');
     const unmount = flattenFnArray(config, 'unmount');
 
-    vBundle.status = NOT_BOOTSTRAPPED;
+    vBundle.status = AppStatuses.NOT_BOOTSTRAPPED;
     vBundle.name = name;
     vBundle.bootstrap = bootstrap;
     vBundle.mount = mount;
 
     vBundle.unmount = unmount;
-    vBundle.timeouts = globalTimeoutConfig;
     vBundle.customRoot = config.customRoot;
 
     if (config.update) {
@@ -539,4 +510,10 @@ function mountVApp(config: any, customProps: any): any {
   );
 
   return returnVapp;
+}
+
+export default function mountRootVBundle(...args: any) {
+  const reValue = mountVBundle.apply(rootMicroFes, args);
+  // console.log('re value', reValue);
+  return reValue;
 }
