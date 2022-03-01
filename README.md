@@ -1,3 +1,3 @@
 # v-micro-fe
 
-a loght weight micro fe framework
+a light weight micro fe framework
